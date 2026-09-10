@@ -11,8 +11,8 @@ android {
         applicationId = "com.linguakey.keyboard"
         minSdk = 23
         targetSdk = 36
-        versionCode = 21
-        versionName = "2.0.1"
+        versionCode = 22
+        versionName = "2.1.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
@@ -39,6 +39,7 @@ dependencies {
     implementation("com.google.mlkit:translate:17.0.3")
 
     testImplementation("junit:junit:4.13.2")
+    testImplementation("org.json:json:20240303")
 }
 
 kotlin {

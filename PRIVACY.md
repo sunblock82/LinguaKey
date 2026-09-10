@@ -1,12 +1,9 @@
-# LinguaKey privacy design
+# LinguaKey 2.1 privacy
 
-LinguaKey is a keyboard, so privacy is a primary product requirement.
-
-- Typed message text is not automatically written to disk by LinguaKey.
-- Text is read only around the current cursor, and only to derive the active Korean sentence for the learning bar.
-- Saved phrases are created only by an explicit press of the star button and are stored in app-private SharedPreferences.
-- Password, visible-password, web-password, and numeric-password editor types disable translation, TTS, tips, and saving.
-- A manual private mode is always available from the keyboard.
-- The app does not request contacts, storage, microphone, location, camera, notification, accessibility, or clipboard permissions.
-- Internet permission exists for downloading the ML Kit translation model. Translation runs on-device after the model is available.
-- No advertising, analytics, crash-reporting, account, or proprietary cloud SDK is included in v1.
+- Offline translation uses ML Kit on-device after model download.
+- Optional GPT/Gemini translation requires selecting a provider, explicit cloud consent and a personal API key. The complete current editable draft (up to 6,000 characters) and the manually configured context/tone are sent to that provider after an adjustable typing pause. No automatic reading of received chat messages, screenshots, clipboard or other apps.
+- Cloud mode does not silently fall back to offline translations. Errors and incomplete API outputs are shown explicitly. OpenAI requests set store=false; provider retention and billing policies still apply.
+- Personal API keys are stored encrypted with Android Keystore and excluded from backups. No developer key is bundled. This build is for personal use; a public multi-user service should use an authenticated backend.
+- Input is not automatically stored. Only explicitly starred phrases are saved; optional statistics store counts. Configured context and tone persist until edited or cleared.
+- Sensitive editor fields and manual private mode disable learning/translation. Pending cloud requests are cancelled on private-mode entry, input changes and keyboard dismissal; cancellation cannot retract data already sent.
+- Network activity uses HTTPS; no analytics SDK is added.

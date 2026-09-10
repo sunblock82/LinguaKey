@@ -47,4 +47,73 @@ class Prefs(context: Context) {
     var emojiRecents: String
         get() = p.getString("emoji_recents", "") ?: ""
         set(v) = p.edit().putString("emoji_recents", v).apply()
+    var keyHeightPercent: Int
+        get() = p.getInt("keyHeightPercent", 110).coerceIn(80, 145)
+        set(v) = p.edit().putInt("keyHeightPercent", v.coerceIn(80, 145)).apply()
+    var keyGapDp: Int
+        get() = p.getInt("keyGapDp", 3).coerceIn(1, 8)
+        set(v) = p.edit().putInt("keyGapDp", v.coerceIn(1, 8)).apply()
+    var sidePaddingDp: Int
+        get() = p.getInt("sidePaddingDp", 6).coerceIn(0, 24)
+        set(v) = p.edit().putInt("sidePaddingDp", v.coerceIn(0, 24)).apply()
+    var bottomPaddingDp: Int
+        get() = p.getInt("bottomPaddingDp", 8).coerceIn(0, 48)
+        set(v) = p.edit().putInt("bottomPaddingDp", v.coerceIn(0, 48)).apply()
+    var keyFontSp: Int
+        get() = p.getInt("keyFontSp", 19).coerceIn(14, 28)
+        set(v) = p.edit().putInt("keyFontSp", v.coerceIn(14, 28)).apply()
+    var letterSpacingPercent: Int
+        get() = p.getInt("letterSpacingPercent", 0).coerceIn(0, 20)
+        set(v) = p.edit().putInt("letterSpacingPercent", v.coerceIn(0, 20)).apply()
+    var vibrationMs: Int
+        get() = p.getInt("vibrationMs", 12).coerceIn(5, 40)
+        set(v) = p.edit().putInt("vibrationMs", v.coerceIn(5, 40)).apply()
+    var soundVolume: Int
+        get() = p.getInt("soundVolume", 20).coerceIn(0, 100)
+        set(v) = p.edit().putInt("soundVolume", v.coerceIn(0, 100)).apply()
+    var cursorSensitivity: Int
+        get() = p.getInt("cursorSensitivity", 5).coerceIn(1, 10)
+        set(v) = p.edit().putInt("cursorSensitivity", v.coerceIn(1, 10)).apply()
+    var repeatDelayMs: Int
+        get() = p.getInt("repeatDelayMs", 350).coerceIn(200, 800)
+        set(v) = p.edit().putInt("repeatDelayMs", v.coerceIn(200, 800)).apply()
+    var repeatIntervalMs: Int
+        get() = p.getInt("repeatIntervalMs", 60).coerceIn(30, 150)
+        set(v) = p.edit().putInt("repeatIntervalMs", v.coerceIn(30, 150)).apply()
+    var cornerRadiusDp: Int
+        get() = p.getInt("cornerRadiusDp", 8).coerceIn(0, 18)
+        set(v) = p.edit().putInt("cornerRadiusDp", v.coerceIn(0, 18)).apply()
+    var translationDelayMs: Int
+        get() = p.getInt("translationDelayMs", 1200).coerceIn(700, 3000)
+        set(v) = p.edit().putInt("translationDelayMs", v.coerceIn(700, 3000)).apply()
+    var pressOnTouchDown: Boolean
+        get() = p.getBoolean("pressOnTouchDown", true)
+        set(v) = p.edit().putBoolean("pressOnTouchDown", v).apply()
+    var keyBorder: Boolean
+        get() = p.getBoolean("keyBorder", false)
+        set(v) = p.edit().putBoolean("keyBorder", v).apply()
+    var doubleSpacePeriod: Boolean
+        get() = p.getBoolean("doubleSpacePeriod", false)
+        set(v) = p.edit().putBoolean("doubleSpacePeriod", v).apply()
+    var cloudConsent: Boolean
+        get() = p.getBoolean("cloudConsent", false)
+        set(v) = p.edit().putBoolean("cloudConsent", v).apply()
+    var translationProvider: String
+        get() = p.getString("translationProvider", "offline") ?: "offline"
+        set(v) = p.edit().putString("translationProvider", v).apply()
+    var openaiModel: String
+        get() = p.getString("openaiModel", "gpt-4.1-mini") ?: "gpt-4.1-mini"
+        set(v) = p.edit().putString("openaiModel", v).apply()
+    var geminiModel: String
+        get() = p.getString("geminiModel", "gemini-2.5-flash") ?: "gemini-2.5-flash"
+        set(v) = p.edit().putString("geminiModel", v).apply()
+    var translationContext: String
+        get() = p.getString("translationContext", "") ?: ""
+        set(v) = p.edit().putString("translationContext", v).apply()
+    var translationTone: String
+        get() = p.getString("translationTone", "자연스러운 일상 대화") ?: "자연스러운 일상 대화"
+        set(v) = p.edit().putString("translationTone", v).apply()
+    var themeMode: String
+        get() = p.getString("themeMode", "system") ?: "system"
+        set(v) = p.edit().putString("themeMode", v).apply()
 }

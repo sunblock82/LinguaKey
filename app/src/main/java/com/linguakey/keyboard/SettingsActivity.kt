@@ -62,6 +62,7 @@ class SettingsActivity : AppCompatActivity() {
         })
         root.addView(button("저장 문장 복습 · SRS") { startActivity(Intent(this, ReviewActivity::class.java)) })
 
+        root.addView(button("상세설정 · 키 간격/감도 · GPT/Gemini") { startActivity(Intent(this, AdvancedSettingsActivity::class.java)) })
         root.addView(section("입력 UX"))
         root.addView(toggle("추천/교정 후보 표시", prefs.showSuggestions) { prefs.showSuggestions = it })
         root.addView(toggle("고신뢰 한국어 띄어쓰기 자동 보정", prefs.autoSpacingEnabled) { prefs.autoSpacingEnabled = it })
@@ -89,7 +90,7 @@ class SettingsActivity : AppCompatActivity() {
         root.addView(section("개인정보 보호"))
         root.addView(TextView(this).apply {
             text = "• 비밀번호/PIN 및 앱이 개인화 학습 금지를 요청한 입력창에서는 학습·추천·통계를 자동 중지합니다.\n" +
-                    "• 번역 모델 다운로드 후 한국어→영어 번역은 ML Kit 온디바이스 엔진으로 처리됩니다.\n" +
+                    "• 기본 번역은 모델 다운로드 후 기기에서 처리합니다. GPT/Gemini 선택 및 허용 시 작성문과 지정 문맥이 해당 제공자에게 전송됩니다.\n" +
                     "• 일반 입력 문장을 자동 보관하지 않습니다. ☆를 누른 문장만 복습용으로 기기에 저장합니다.\n" +
                     "• 통계에는 번역 횟수 같은 집계값만 저장하며 원문을 저장하지 않습니다.\n" +
                     "• 클립보드, 연락처, 위치, 카메라를 읽지 않습니다."

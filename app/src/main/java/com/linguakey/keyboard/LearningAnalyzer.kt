@@ -30,7 +30,7 @@ object LearningAnalyzer {
     )
 
     fun analyze(korean: String, literalEnglish: String): Analysis {
-        val natural = naturalRules.firstOrNull { it.first.containsMatchIn(korean) }?.second ?: literalEnglish
+        val natural = literalEnglish // Never replace a full translation with a phrase-level example.
         val normalized = literalEnglish.lowercase()
         val phrases = phrasalVerbs.filter { normalized.contains(it) }.take(4)
         val level = estimateCefr(literalEnglish)

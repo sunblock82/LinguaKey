@@ -1,54 +1,18 @@
-# LinguaKey — Korean → English learning IME
+# LinguaKey 2.1.0
 
-LinguaKey is an Android input method designed for language learning: the text field keeps the Korean text the user actually intends to send, while a learning bar above the keyboard continuously shows an English translation.
+Korean keyboard with full-draft Korean-to-English learning translations.
 
-## What v1 includes
+## This update
+- Full editable draft extraction, including text after the cursor and paragraph breaks. Inputs over 6,000 characters fail explicitly, rather than being silently truncated. Offline chunks preserve all input.
+- Removed phrase-rule replacement of entire translations. Translation output is scrollable.
+- Optional OpenAI Responses / Gemini generateContent integration with personal encrypted API keys, cloud consent, manually configured context and tone, request cancellation and incomplete-response detection. Model names are editable. Defaults: gpt-4.1-mini and gemini-2.5-flash.
+- Advanced settings: keyboard height, key spacing, side/bottom padding, font size/letter spacing, corners/borders/themes, touch-down or release input, key preview, vibration duration, sound volume, cursor sensitivity, backspace delay/repeat, double-space period.
 
-- Independent Android IME (`InputMethodService`)
-- Korean 2-beolsik Hangul composition + English layout toggle
-- Debounced Korean→English translation shown only in the keyboard UI
-- ML Kit on-device translation after model download
-- Password/PIN/private-field detection: learning panel disabled
-- Manual private mode
-- English TTS pronunciation
-- Star/save phrase locally; no automatic message history
-- Due-card review screen with simple spaced intervals
-- Conservative curated expression tips
-- No clipboard reading, no analytics SDK, no account, no cloud database
+## Installation
+Install the APK from the Actions artifact. Enable LinguaKey in Android keyboard settings and select it. For cloud translation open Advanced Settings > AI translation, choose provider, save API key locally and enable explicit cloud consent. Set context/tone and run the test button. Personal API access/billing is required separately. Keys must not be committed to this repository.
+
+## Validation
+CI runs all unit tests before assembling the APK. Tests cover Hangul composing batches, phrase-preservation regression, lossless chunking, length limits and provider-response parsing. Actual cloud calls require a user API key and have not been live-tested in CI. OEM keyboard UX needs on-device checking.
 
 ## Build
-
-Recommended: Android Studio Quail or newer, JDK 17+, Android SDK 36.
-
-1. Open this folder in Android Studio.
-2. Let Gradle sync.
-3. Build > Build APK(s).
-4. Install on the phone.
-5. Open LinguaKey > `1. 키보드 활성화` and enable LinguaKey.
-6. Tap `2. 사용할 키보드 선택` and choose LinguaKey.
-7. Connect to Wi-Fi the first time so the Korean/English translation model can download.
-
-The ML Kit translation dependency is `com.google.mlkit:translate:17.0.3` and requires minSdk 23+.
-
-## Privacy model
-
-The keyboard deliberately does not persist typed text. It only stores a pair when the user presses ☆. Sensitive editor types (password/web-password/number-password) disable the learning bar. A manual private mode is also available.
-
-ML Kit may use configured source/destination language metadata for diagnostics according to Google's ML Kit disclosure documentation; the app itself adds no analytics SDK.
-
-## Known v1 limitations
-
-- This is a fresh IME and has not yet been device-tested on every OEM/app combination.
-- Autocorrection, swipe typing, emoji search, multilingual prediction, hardware keyboard handling, and accessibility polishing are future work.
-- ML Kit translation is optimized for casual translation; subtle conversational nuance should be validated before treating every result as authoritative learning material.
-- The symbol layer covers common punctuation and numbers; emoji search and advanced symbols are future work.
-
-## Architecture
-
-- `LinguaKeyImeService`: IME lifecycle + keyboard/learning bar
-- `HangulComposer`: Korean composition state machine
-- `TranslatorManager`: ML Kit model/translation lifecycle
-- `SensitiveFieldDetector`: privacy gating
-- `SentenceExtractor`: extracts only the active sentence near cursor
-- `ExpressionCoach`: curated learning tips
-- `PhraseStore` / `ReviewActivity`: opt-in local learning history and review
+JDK 17, Gradle 8.13, Android SDK 36; run `gradle :app:testDebugUnitTest :app:assembleDebug`. GitHub Actions caches the debug signing identity for subsequent builds; this is not a durable production release-signing system.

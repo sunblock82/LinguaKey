@@ -15,7 +15,7 @@ class LearningCoreTest {
 
     @Test fun naturalExpression() {
         val a = LearningAnalyzer.analyze("아무거나 괜찮아", "Anything is okay.")
-        assertTrue(a.natural.contains("Anything works"))
+        assertEquals("Anything is okay.", a.natural)
     }
 
     @Test fun sentenceContext() {
