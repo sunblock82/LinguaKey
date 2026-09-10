@@ -18,6 +18,8 @@ import android.view.View
 import android.view.ViewGroup
 import android.view.inputmethod.EditorInfo
 import android.view.inputmethod.InputMethodManager
+import androidx.core.view.ViewCompat
+import androidx.core.view.WindowInsetsCompat
 import android.widget.HorizontalScrollView
 import android.widget.LinearLayout
 import android.widget.ScrollView
@@ -56,6 +58,7 @@ class LinguaKeyImeService : InputMethodService(), TextToSpeech.OnInitListener {
     private var shiftState = ShiftState.OFF
     private var tts: TextToSpeech? = null
     private var generation = 0L
+    private var inputActive = false
     private var lastShiftTap = 0L
     private val sessionRecorded = linkedSetOf<Int>()
 
@@ -102,6 +105,16 @@ class LinguaKeyImeService : InputMethodService(), TextToSpeech.OnInitListener {
             setPadding(dp(5), dp(5), dp(5), dp(7))
             setBackgroundColor(bg)
         }
+        // Use system-provided navigation insets, not a fixed device-specific gap.
+        ViewCompat.setOnApplyWindowInsetsListener(keyboardRoot!!) { view, insets ->
+            val bars = insets.getInsets(WindowInsetsCompat.Type.navigationBars() or WindowInsetsCompat.Type.displayCutout())
+            view.setPadding(dp(5) + bars.left, dp(5), dp(5) + bars.right, dp(7) + bars.bottom)
+            insets
+        }
+        keyboardRoot!!.addOnAttachStateChangeListener(object : View.OnAttachStateChangeListener {
+            override fun onViewAttachedToWindow(v: View) { ViewCompat.requestApplyInsets(v) }
+            override fun onViewDetachedFromWindow(v: View) = Unit
+        })
         keyboardRoot!!.addView(createLearningBar())
         keyboardRoot!!.addView(createCandidateBar())
         rebuildKeys()
@@ -117,7 +130,7 @@ class LinguaKeyImeService : InputMethodService(), TextToSpeech.OnInitListener {
         val top = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL }
         naturalText = TextView(this).apply {
             text = "한글을 입력하면 자연스러운 영어가 표시됩니다."
-            textSize = 15.5f; setTextColor(keyText); maxLines = 2; setTypeface(typeface, Typeface.BOLD)
+            textSize = 15.5f; setTextColor(keyText); minLines = 2; maxLines = 2; setTypeface(typeface, Typeface.BOLD)
             setPadding(0, 0, dp(4), 0)
             setOnClickListener { prefs.learningBarExpanded = !prefs.learningBarExpanded; renderAnalysisDetails() }
         }
@@ -186,7 +199,7 @@ class LinguaKeyImeService : InputMethodService(), TextToSpeech.OnInitListener {
         addRow(root, rows[0].map { if (upper) it.uppercase() else it.toString() }, dp(49))
         val middle = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER }
         middle.setPadding(dp(16), 0, dp(16), 0)
-        rows[1].forEach { c -> middle.addView(keyView(if (upper) c.uppercase() else c.toString()) { handleCharacter(if (upper) c.uppercaseChar() else c) }, weighted(1f)) }
+        rows[1].forEach { c -> middle.addView(keyView(if (upper) c.uppercase() else c.toString(), immediate = true) { handleCharacter(if (upper) c.uppercaseChar() else c) }, weighted(1f)) }
         root.addView(middle, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(49)))
         val last = listOf("SHIFT") + rows[2].map { if (upper) it.uppercase() else it.toString() } + "⌫"
         addRow(root, last, dp(49))
@@ -250,21 +263,29 @@ class LinguaKeyImeService : InputMethodService(), TextToSpeech.OnInitListener {
             val view = when (label) {
                 "⌫" -> backspaceKey()
                 "SHIFT" -> shiftKey()
-                else -> keyView(label) { handleCharacter(label[0]) }
+                else -> keyView(label, immediate = true) { handleCharacter(label[0]) }
             }
             row.addView(view, weighted(if (label == "SHIFT" || label == "⌫") 1.15f else 1f))
         }
         root.addView(row, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, height))
     }
 
-    private fun keyView(label: String, action: () -> Unit): TextView = TextView(this).apply {
+    private fun keyView(label: String, immediate: Boolean = false, action: () -> Unit): TextView = TextView(this).apply {
         text = label
         textSize = when { label.length == 1 -> 19f; label.length <= 3 -> 14f; else -> 12f }
         gravity = Gravity.CENTER; setTextColor(keyText); background = rounded(keyBg, 8f); isClickable = true
+        isFocusable = false
         setOnClickListener { v -> keyFeedback(v); action() }
+        if (immediate) setOnTouchListener { view, event ->
+            when (event.actionMasked) {
+                MotionEvent.ACTION_DOWN -> { view.isPressed = true; view.performClick(); true }
+                MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> { view.isPressed = false; true }
+                else -> true
+            }
+        }
     }
 
-    private fun toolButton(label: String, action: () -> Unit) = keyView(label, action).apply {
+    private fun toolButton(label: String, action: () -> Unit) = keyView(label, action = action).apply {
         textSize = 14f; minWidth = dp(40); minimumWidth = dp(40); minHeight = dp(36); minimumHeight = dp(36)
         setPadding(dp(4), 0, dp(4), 0)
     }
@@ -339,9 +360,7 @@ class LinguaKeyImeService : InputMethodService(), TextToSpeech.OnInitListener {
             commitComposition(); currentInputConnection?.commitText(ch.toString(), 1)
         } else if (koreanMode && isHangulJamo(ch)) {
             val result = composer.feed(ch)
-            if (result.commit.isNotEmpty()) currentInputConnection?.commitText(result.commit, 1)
-            if (result.composing.isNotEmpty()) currentInputConnection?.setComposingText(result.composing, 1)
-            else currentInputConnection?.finishComposingText()
+            currentInputConnection?.let { CompositionEdits.apply(it, result) }
         } else {
             commitComposition(); currentInputConnection?.commitText(ch.toString(), 1)
             if (shiftState == ShiftState.ON) { shiftState = ShiftState.OFF; rebuildKeys() }
@@ -374,8 +393,7 @@ class LinguaKeyImeService : InputMethodService(), TextToSpeech.OnInitListener {
     private fun backspace() {
         if (composer.hasComposition()) {
             val r = composer.backspace()
-            if (r.composing.isNotEmpty()) currentInputConnection?.setComposingText(r.composing, 1)
-            else { currentInputConnection?.setComposingText("", 1); currentInputConnection?.finishComposingText() }
+            currentInputConnection?.let { CompositionEdits.apply(it, r) }
         } else currentInputConnection?.deleteSurroundingText(1, 0)
         scheduleAll(260L)
     }
@@ -401,22 +419,32 @@ class LinguaKeyImeService : InputMethodService(), TextToSpeech.OnInitListener {
         else -> "↵"
     }
 
-    private fun scheduleAll(delay: Long = 430L) {
-        handler.removeCallbacks(translateRunnable); handler.postDelayed(translateRunnable, delay)
-        handler.removeCallbacks(suggestionsRunnable); handler.postDelayed(suggestionsRunnable, 90L)
+    private fun scheduleAll(delay: Long = 550L) {
+        // Invalidate old asynchronous results immediately when the text changes.
+        generation++
+        handler.removeCallbacks(translateRunnable)
+        handler.removeCallbacks(suggestionsRunnable)
+        if (!inputActive) return
+        handler.postDelayed(translateRunnable, delay)
+        // Avoid synchronous cross-process cursor reads between rapid keystrokes.
+        handler.postDelayed(suggestionsRunnable, 300L)
     }
 
     private fun updateTranslationNow() {
+        if (!inputActive) return
         if (sensitive || manualIncognito) { showPrivateMode(); return }
         if (!prefs.translationEnabled) { naturalText?.text = "실시간 영어 표시가 꺼져 있습니다."; return }
         val source = SentenceExtractor.current(currentInputConnection?.getTextBeforeCursor(900, 0))
         if (source.length < 2 || !source.any { it in '가'..'힣' }) { clearLearningBar(); return }
+        if (source == currentKorean && currentEnglish.isNotBlank()) return
         currentKorean = source
-        val myGeneration = ++generation
-        naturalText?.text = "영어 표현 만드는 중…"
+        currentEnglish = ""; currentNatural = ""
+        val myGeneration = generation
+        // Keep the last displayed translation while a new one is being prepared.
+        // Replacing it with a loading sentence causes unnecessary keyboard re-layout.
         pipeline.translate(source,
             onSuccess = { en ->
-                if (myGeneration == generation && !sensitive && !manualIncognito) {
+                if (myGeneration == generation && inputActive && !sensitive && !manualIncognito) {
                     currentEnglish = en.trim()
                     currentAnalysis = LearningAnalyzer.analyze(source, currentEnglish)
                     currentNatural = currentAnalysis?.natural.orEmpty()
@@ -452,6 +480,7 @@ class LinguaKeyImeService : InputMethodService(), TextToSpeech.OnInitListener {
     }
 
     private fun updateSuggestions() {
+        if (!inputActive) return
         val row = candidateRow ?: return
         row.removeAllViews()
         if (!prefs.showSuggestions || sensitive || manualIncognito || emojiMode) {
@@ -472,10 +501,14 @@ class LinguaKeyImeService : InputMethodService(), TextToSpeech.OnInitListener {
             val word = SentenceExtractor.currentWord(before)
             val local = SmartCorrectionEngine.englishWord(word).map { it.replacement }
             if (local.isNotEmpty()) renderEnglishSuggestions(word, local)
-            else spellChecker.suggest(word) { system ->
-                handler.post {
-                    val still = SentenceExtractor.currentWord(currentInputConnection?.getTextBeforeCursor(80, 0))
-                    if (still.equals(word, true)) renderEnglishSuggestions(word, system)
+            else {
+                val requestedGeneration = generation
+                spellChecker.suggest(word) { system ->
+                    handler.post {
+                        if (inputActive && requestedGeneration == generation && !sensitive && !manualIncognito) {
+                            renderEnglishSuggestions(word, system)
+                        }
+                    }
                 }
             }
         }
@@ -503,14 +536,22 @@ class LinguaKeyImeService : InputMethodService(), TextToSpeech.OnInitListener {
 
     private fun applySentenceReplacement(original: String, replacement: String) {
         if (original.isBlank() || original == replacement) return
-        currentInputConnection?.deleteSurroundingText(original.length, 0)
-        currentInputConnection?.commitText(replacement, 1)
+        val connection = currentInputConnection ?: return
+        connection.beginBatchEdit()
+        try {
+            connection.deleteSurroundingText(original.length, 0)
+            connection.commitText(replacement, 1)
+        } finally { connection.endBatchEdit() }
     }
 
     private fun replaceLastWord(original: String, replacement: String) {
         if (original.isBlank() || original == replacement) return
-        currentInputConnection?.deleteSurroundingText(original.length, 0)
-        currentInputConnection?.commitText(replacement, 1)
+        val connection = currentInputConnection ?: return
+        connection.beginBatchEdit()
+        try {
+            connection.deleteSurroundingText(original.length, 0)
+            connection.commitText(replacement, 1)
+        } finally { connection.endBatchEdit() }
     }
 
     private fun clearLearningBar() {
@@ -553,6 +594,8 @@ class LinguaKeyImeService : InputMethodService(), TextToSpeech.OnInitListener {
 
     override fun onStartInput(attribute: EditorInfo?, restarting: Boolean) {
         super.onStartInput(attribute, restarting)
+        handler.removeCallbacks(translateRunnable); handler.removeCallbacks(suggestionsRunnable)
+        inputActive = true
         composer.reset(); generation++; sensitive = SensitiveFieldDetector.isSensitive(attribute)
         currentKorean = ""; currentEnglish = ""; currentNatural = ""; currentAnalysis = null
         shiftState = ShiftState.OFF; symbolMode = false; emojiMode = false
@@ -560,12 +603,21 @@ class LinguaKeyImeService : InputMethodService(), TextToSpeech.OnInitListener {
 
     override fun onStartInputView(info: EditorInfo?, restarting: Boolean) {
         super.onStartInputView(info, restarting)
+        inputActive = true
         sensitive = SensitiveFieldDetector.isSensitive(info)
+        keyboardRoot?.let { ViewCompat.requestApplyInsets(it) }
         rebuildKeys()
         if (sensitive || manualIncognito) showPrivateMode() else scheduleAll(100L)
     }
 
+    override fun onFinishInputView(finishingInput: Boolean) {
+        inputActive = false; generation++
+        handler.removeCallbacks(translateRunnable); handler.removeCallbacks(suggestionsRunnable)
+        super.onFinishInputView(finishingInput)
+    }
+
     override fun onFinishInput() {
+        inputActive = false
         super.onFinishInput(); handler.removeCallbacks(translateRunnable); handler.removeCallbacks(suggestionsRunnable)
         composer.reset(); generation++; currentKorean = ""; currentEnglish = ""; currentNatural = ""; currentAnalysis = null
     }
