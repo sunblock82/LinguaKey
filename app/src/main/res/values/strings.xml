@@ -1,0 +1,5 @@
+<resources>
+    <string name="app_name">LinguaKey</string>
+    <string name="ime_name">LinguaKey 영어학습 키보드</string>
+    <string name="settings_name">LinguaKey 설정</string>
+</resources>
