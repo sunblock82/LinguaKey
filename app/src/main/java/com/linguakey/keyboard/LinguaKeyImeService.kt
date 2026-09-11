@@ -25,6 +25,7 @@ import android.view.inputmethod.EditorInfo
 import android.view.inputmethod.InputMethodManager
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowInsetsCompat
+import androidx.core.view.WindowInsetsControllerCompat
 import android.widget.HorizontalScrollView
 import android.widget.LinearLayout
 import android.widget.ScrollView
@@ -693,6 +694,12 @@ class LinguaKeyImeService : InputMethodService(), TextToSpeech.OnInitListener {
         inputActive = true
         sensitive = SensitiveFieldDetector.isSensitive(info)
         resolvePalette()
+        window?.window?.let { imeWindow ->
+            @Suppress("DEPRECATION")
+            imeWindow.navigationBarColor = bg
+            WindowInsetsControllerCompat(imeWindow, imeWindow.decorView).isAppearanceLightNavigationBars =
+                Color.red(bg) + Color.green(bg) + Color.blue(bg) > 382
+        }
         setInputView(onCreateInputView())
         keyboardRoot?.let { ViewCompat.requestApplyInsets(it) }
         if (sensitive || manualIncognito) showPrivateMode() else scheduleAll(100L)
