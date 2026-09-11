@@ -4,9 +4,11 @@ object LearningAnalyzer {
     data class Analysis(
         val literal: String,
         val natural: String,
+        /** A sentence length is not a validated CEFR assessment. Retained for saved-format compatibility. */
         val cefr: String,
         val phrases: List<String>,
-        val tip: String?
+        val tip: String?,
+        val difficultyLabel: String = "CEFR 미평가"
     )
 
     private val phrasalVerbs = listOf(
@@ -16,39 +18,15 @@ object LearningAnalyzer {
         "be supposed to", "be used to", "get used to", "give up", "keep up", "set up", "show up"
     )
 
-    private val naturalRules = listOf(
-        Regex("아무거나\\s*(괜찮|좋)") to "Anything works for me.",
-        Regex("(진짜|정말)?.*아무것도.*하기\\s*싫") to "I really don't feel like doing anything.",
-        Regex("잘\\s*모르겠") to "I'm not really sure.",
-        Regex("상관\\s*없") to "I don't mind. / Either is fine.",
-        Regex("오랜만") to "It's been a while.",
-        Regex("연락\\s*줘") to "Let me know. / Text me.",
-        Regex("확인해\\s*볼게") to "I'll check and get back to you.",
-        Regex("생각해\\s*볼게") to "I'll think about it.",
-        Regex("어쩔\\s*수\\s*없") to "It can't be helped. / There's not much we can do.",
-        Regex("말이\\s*돼") to "Does that make sense? / Are you serious?"
-    )
+    private val phrasePatterns = phrasalVerbs.map { phrase ->
+        phrase to Regex("(?<![A-Za-z])" + phrase.split(' ').joinToString("\\s+") { Regex.escape(it) } + "(?![A-Za-z])", RegexOption.IGNORE_CASE)
+    }
 
     fun analyze(korean: String, literalEnglish: String): Analysis {
         val natural = literalEnglish // Never replace a full translation with a phrase-level example.
-        val normalized = literalEnglish.lowercase()
-        val phrases = phrasalVerbs.filter { normalized.contains(it) }.take(4)
-        val level = estimateCefr(literalEnglish)
-        val curatedTip = ExpressionCoach.tipFor(korean)?.let { "${it.title}: ${it.body}" }
-        return Analysis(literalEnglish, natural, level, phrases, curatedTip)
-    }
-
-    private fun estimateCefr(text: String): String {
-        val words = Regex("[A-Za-z']+").findAll(text).map { it.value.lowercase() }.toList()
-        if (words.isEmpty()) return "A1"
-        val advanced = setOf("nevertheless", "consequently", "apparently", "presumably", "regardless", "whereas", "despite", "otherwise", "eventually")
-        val upper = words.count { it.length >= 9 || it in advanced }
-        return when {
-            words.size >= 22 || upper >= 3 -> "C1"
-            words.size >= 14 || upper >= 2 -> "B2"
-            words.size >= 9 || upper >= 1 -> "B1"
-            words.size >= 5 -> "A2"
-            else -> "A1"
-        }
+        val phrases = phrasePatterns.filter { (_, pattern) -> pattern.containsMatchIn(literalEnglish) }.map { it.first }.take(4)
+        val curatedTip = ExpressionCoach.tipFor(korean)?.let { "관련 표현 예시 · ${it.title}\n${it.body}" }
+        val wordCount = Regex("[A-Za-z]+(?:['’][A-Za-z]+)*").findAll(literalEnglish).count()
+        return Analysis(literalEnglish, natural, "미평가", phrases, curatedTip, "영어 ${wordCount}단어 · CEFR 미평가")
     }
 }

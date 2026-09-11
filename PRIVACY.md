@@ -1,9 +1,23 @@
-# LinguaKey 2.1 privacy
+# LinguaKey 개인정보 안내
 
-- Offline translation uses ML Kit on-device after model download.
-- Optional GPT/Gemini translation requires selecting a provider, explicit cloud consent and a personal API key. The complete current editable draft (up to 6,000 characters) and the manually configured context/tone are sent to that provider after an adjustable typing pause. No automatic reading of received chat messages, screenshots, clipboard or other apps.
-- Cloud mode does not silently fall back to offline translations. Errors and incomplete API outputs are shown explicitly. OpenAI requests set store=false; provider retention and billing policies still apply.
-- Personal API keys are stored encrypted with Android Keystore and excluded from backups. No developer key is bundled. This build is for personal use; a public multi-user service should use an authenticated backend.
-- Input is not automatically stored. Only explicitly starred phrases are saved; optional statistics store counts. Configured context and tone persist until edited or cleared.
-- Sensitive editor fields and manual private mode disable learning/translation. Pending cloud requests are cancelled on private-mode entry, input changes and keyboard dismissal; cancellation cannot retract data already sent.
-- Network activity uses HTTPS; no analytics SDK is added.
+## 입력문과 네트워크
+- 기본 번역은 ML Kit이 기기에서 처리합니다. Google 설명상 입력문과 번역 결과는 Google 서버로 보내지 않습니다. 다만 모델 다운로드·업데이트와 기기·앱 정보, 성능·사용 진단 지표 전송이 있습니다. 이를 ‘통신이 전혀 없는 앱’으로 안내하지 않습니다. [ML Kit 개인정보 안내](https://developers.google.com/ml-kit/terms), [SDK 수집 항목](https://developers.google.com/ml-kit/android-data-disclosure).
+- 선택형 GPT/Gemini는 제공자 선택, 본인 API 키, 명시적 전송 허용 후에만 작동합니다. 입력을 잠시 멈추면 현재 작성문 전체(6,000자까지)와 직접 지정한 상황·말투를 선택한 제공자에게 HTTPS로 전송합니다. 전송 허용은 기본적으로 꺼져 있습니다.
+- 받은 대화, 스크린샷, 클립보드, 연락처, 위치를 자동으로 읽지 않습니다. 일반 메시지 안의 개인정보는 자동 익명화하지 않으므로 민감한 내용을 작성하기 전 비공개 모드를 켜세요.
+- 클라우드 요청은 고정된 공식 호스트만 사용하며 리다이렉트를 따르지 않습니다. OpenAI는 `store=false`로 요청하지만 제공자의 보관·처리 정책을 없애는 설정은 아닙니다. 제공자 계정 유형·요금제별 데이터 정책과 API 비용이 적용됩니다.
+- 입력 변경, 입력창 전환, 키보드 종료, 비공개 모드에서는 요청과 결과 표시를 취소합니다. 이미 전송된 데이터는 회수할 수 없습니다.
+
+## 기기에 남는 데이터
+- 일반 입력문은 자동으로 영구 저장하지 않습니다. 현재 입력창의 일시적 번역 캐시는 입력창 전환·종료·비공개 모드에서 지웁니다. 관리형 메모리의 완전한 물리적 소거를 보장하지 않습니다.
+- ☆로 직접 저장한 한국어·영어 문장은 앱 전용 저장 공간에 저장합니다. 별도의 문장 암호화는 없으며 Android 앱 격리와 기기 저장소 보호에 의존합니다.
+- 선택한 키보드 설정, 최근 이모지, 직접 지정한 문맥·말투가 저장됩니다. 비공개·민감 입력 중에는 최근 이모지를 갱신하지 않습니다. 선택형 학습 통계는 원문 없이 집계값을 저장합니다.
+- API 키는 Android Keystore의 AES-GCM으로 암호화하며 제공자별 인증 데이터를 사용합니다. 키 원문을 소스·로그에 넣지 않습니다. 앱의 API 설정 화면은 캡처 방지와 자동완성·개인화 금지 속성을 적용합니다.
+- 자동 백업과 Android 기기 간 이전에서 앱 데이터를 제외하도록 설정했습니다. 루팅, 변조 OS, 악성 접근성 서비스 등 기기 전체가 침해된 상황까지 보장하지 않습니다.
+- `상세설정 → AI 번역 → 개인정보 · 데이터 관리`에서 저장 문장·통계 또는 API 키·지정 문맥을 삭제할 수 있습니다. 이 기기에서 키를 삭제해도 제공자 계정의 키가 폐기되지는 않습니다. 앱 삭제는 앱 전용 데이터를 제거합니다.
+
+## 민감 입력과 발음
+- 비밀번호·PIN·이메일·전화 및 개인화 금지 입력 속성, 인증번호 등의 힌트를 감지하면 번역·추천·학습 통계를 중지합니다. 호스트 앱이 잘못된 입력 속성을 제공하면 감지에 한계가 있습니다. 키보드의 ◉ 버튼으로 비공개 모드를 직접 켤 수 있습니다.
+- 시스템 맞춤법 검사기에 입력문을 보내지 않습니다. 발음 버튼은 설치된 TTS 엔진이 오프라인 영어 음성으로 표시한 음성만 사용합니다. 해당 음성이 없으면 설치 안내를 표시합니다. 제3자 TTS 엔진이 제공하는 음성 속성의 진실성까지 앱이 검증할 수는 없습니다.
+
+## 검토 범위
+코드 및 자동 테스트 기반 점검입니다. 독립 보안업체 인증, 실제 API 운영 검증, 모든 제조사 기기 실측을 의미하지 않습니다. [기술 검토 기록](SECURITY_REVIEW.md).

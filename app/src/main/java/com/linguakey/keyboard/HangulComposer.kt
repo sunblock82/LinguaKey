@@ -5,10 +5,14 @@ package com.linguakey.keyboard
  * It returns the entire composing syllable/string; the IME sends it via setComposingText().
  */
 class HangulComposer {
+    /** Allow ㄱ + ㄱ -> ㄲ; can be disabled for ordinary repeated-jamo chat input. */
+    var combineDoubleInitials: Boolean = true
     private var l: Int = -1
     private var v: Int = -1
     private var t: Int = 0
     private var raw: String = ""
+    // Distinguish two taps on ㄱ from one tap on the shifted ㄲ key when deleting.
+    private var initialBeforeDouble: Int = -1
 
     private val L = listOf('ㄱ','ㄲ','ㄴ','ㄷ','ㄸ','ㄹ','ㅁ','ㅂ','ㅃ','ㅅ','ㅆ','ㅇ','ㅈ','ㅉ','ㅊ','ㅋ','ㅌ','ㅍ','ㅎ')
     private val V = listOf('ㅏ','ㅐ','ㅑ','ㅒ','ㅓ','ㅔ','ㅕ','ㅖ','ㅗ','ㅘ','ㅙ','ㅚ','ㅛ','ㅜ','ㅝ','ㅞ','ㅟ','ㅠ','ㅡ','ㅢ','ㅣ')
@@ -39,7 +43,7 @@ class HangulComposer {
 
     fun hasComposition(): Boolean = l >= 0 || v >= 0 || t > 0 || raw.isNotEmpty()
 
-    fun reset() { l = -1; v = -1; t = 0; raw = "" }
+    fun reset() { l = -1; v = -1; t = 0; raw = ""; initialBeforeDouble = -1 }
 
     fun feed(jamo: Char): Result {
         val li = L.indexOf(jamo)
@@ -65,8 +69,9 @@ class HangulComposer {
             return Result("", display(), false)
         }
         if (l >= 0) {
-            l = -1
-            return Result("", "", false)
+            l = initialBeforeDouble
+            initialBeforeDouble = -1
+            return Result("", display(), false)
         }
         return Result("", "", false)
     }
@@ -77,34 +82,34 @@ class HangulComposer {
             raw = ch.toString()
             return Result(c, display(), false)
         }
-        if (l < 0 && v < 0) { l = li; return Result("", display(), false) }
+        if (l < 0 && v < 0) { l = li; initialBeforeDouble = -1; return Result("", display(), false) }
         if (l >= 0 && v < 0) {
             // Double initial consonants where possible, otherwise commit previous jamo.
             val doubled = when (l to li) {
                 0 to 0 -> 1; 3 to 3 -> 4; 7 to 7 -> 8; 9 to 9 -> 10; 12 to 12 -> 13; else -> -1
             }
-            if (doubled >= 0) { l = doubled; return Result("", display(), false) }
-            val c = display(); l = li; return Result(c, display(), false)
+            if (combineDoubleInitials && doubled >= 0) { initialBeforeDouble = l; l = doubled; return Result("", display(), false) }
+            val c = display(); l = li; initialBeforeDouble = -1; return Result(c, display(), false)
         }
         if (l < 0 && v >= 0) {
-            val c = display(); l = li; v = -1; return Result(c, display(), false)
+            val c = display(); l = li; v = -1; initialBeforeDouble = -1; return Result(c, display(), false)
         }
         if (t == 0) {
             val ti = lToT[li]
             if (ti != null) { t = ti; return Result("", display(), false) }
-            val c = display(); l = li; v = -1; t = 0; return Result(c, display(), false)
+            val c = display(); l = li; v = -1; t = 0; initialBeforeDouble = -1; return Result(c, display(), false)
         }
         val nextT = lToT[li]
         val compound = if (nextT != null) compoundT[t to nextT] else null
         if (compound != null) { t = compound; return Result("", display(), false) }
-        val c = display(); l = li; v = -1; t = 0; return Result(c, display(), false)
+        val c = display(); l = li; v = -1; t = 0; initialBeforeDouble = -1; return Result(c, display(), false)
     }
 
     private fun feedVowel(vi: Int, ch: Char): Result {
         if (raw.isNotEmpty()) {
             val c = raw
             raw = ""
-            l = 11 // ㅇ
+            l = -1
             v = vi
             return Result(c, display(), false)
         }
@@ -118,7 +123,8 @@ class HangulComposer {
         if (t == 0) {
             val cv = compoundV[v to vi]
             if (cv != null) { v = cv; return Result("", display(), false) }
-            val c = display(); l = 11; v = vi; return Result(c, display(), false)
+            // A new isolated vowel must remain a jamo; do not invent an ㅇ keypress.
+            val c = display(); l = -1; v = vi; initialBeforeDouble = -1; return Result(c, display(), false)
         }
 
         // Final consonant moves to next syllable when a vowel follows.
@@ -128,16 +134,16 @@ class HangulComposer {
         return if (split != null) {
             val (firstT, secondT) = split
             val first = compose(originalL, originalV, firstT)
-            l = tToL[secondT] ?: 11; v = vi; t = 0
+            l = tToL[secondT] ?: -1; v = vi; t = 0; initialBeforeDouble = -1
             Result(first.toString(), display(), false)
         } else {
             val movedL = tToL[t]
             if (movedL != null) {
                 val first = compose(originalL, originalV, 0)
-                l = movedL; v = vi; t = 0
+                l = movedL; v = vi; t = 0; initialBeforeDouble = -1
                 Result(first.toString(), display(), false)
             } else {
-                val c = display(); l = 11; v = vi; t = 0
+                val c = display(); l = -1; v = vi; t = 0; initialBeforeDouble = -1
                 Result(c, display(), false)
             }
         }

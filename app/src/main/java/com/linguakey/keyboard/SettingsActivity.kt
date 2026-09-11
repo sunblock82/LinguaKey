@@ -83,7 +83,7 @@ class SettingsActivity : AppCompatActivity() {
         root.addView(TextView(this).apply {
             text = "연속 ${s.streak}일  ·  오늘 번역 ${s.todayTranslated}회\n" +
                     "누적 번역 ${s.translated}  ·  듣기 ${s.listened}  ·  저장 ${s.saved}  ·  복습 ${s.reviewed}\n" +
-                    "난이도 분포  A1–A2 ${s.a1a2}  /  B1–B2 ${s.b1b2}  /  C1+ ${s.c1c2}"
+                    "문장 난이도는 참고용이며 공식 CEFR 평가가 아닙니다."
             textSize = 15f; setLineSpacing(0f, 1.25f)
         })
 
@@ -93,17 +93,17 @@ class SettingsActivity : AppCompatActivity() {
                     "• 기본 번역은 모델 다운로드 후 기기에서 처리합니다. GPT/Gemini 선택 및 허용 시 작성문과 지정 문맥이 해당 제공자에게 전송됩니다.\n" +
                     "• 일반 입력 문장을 자동 보관하지 않습니다. ☆를 누른 문장만 복습용으로 기기에 저장합니다.\n" +
                     "• 통계에는 번역 횟수 같은 집계값만 저장하며 원문을 저장하지 않습니다.\n" +
-                    "• 클립보드, 연락처, 위치, 카메라를 읽지 않습니다."
+                    "• 클립보드, 연락처, 위치, 카메라를 읽지 않습니다.\n• ML Kit은 입력문·번역문을 Google로 보내지 않지만 기기·앱 정보와 성능·사용 진단 지표를 전송할 수 있습니다."
             textSize = 15f; setLineSpacing(0f, 1.28f)
         })
 
         root.addView(section("현재 구현 범위"))
         root.addView(TextView(this).apply {
-            text = "두벌식 한글 조합 · 영문 QWERTY · Shift/Caps Lock · 길게 누르는 백스페이스 반복 · 스페이스바 커서 이동 · 숫자/기호 · 이모지/최근 이모지 · 입력 후보 · 띄어쓰기/오타 보정 · 실시간 번역 · 직역/자연스러운 표현 비교 · 숙어/구동사 추출 · CEFR 난이도 · TTS · 저장 · SM-2 계열 복습 · 집계 통계"
+            text = "두벌식 한글 조합 · 영문 QWERTY · Shift/Caps Lock · 길게 누르는 백스페이스 반복 · 스페이스바 커서 이동 · 숫자/기호 · 이모지/최근 이모지 · 입력 후보 · 띄어쓰기/오타 보정 · 실시간 번역 · 전체 번역 · 표현 예시 · 참고용 읽기 복잡도 · TTS · 저장 · SM-2 계열 복습 · 집계 통계"
             textSize = 14f; setLineSpacing(0f, 1.25f)
         })
 
-        setContentView(ScrollView(this).apply { addView(root) })
+        setContentView(ScrollView(this).apply { addView(root); ScreenInsets.apply(this) })
     }
 
     private fun section(s: String) = TextView(this).apply {

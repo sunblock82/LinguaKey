@@ -41,9 +41,12 @@ class LinguaKeyImeService : InputMethodService(), TextToSpeech.OnInitListener {
     private lateinit var cloud: CloudTranslator
     private var keyPopup: PopupWindow? = null
     private var lastSpaceTime = 0L
+    private var selectionActive = false
+    private var translatedGeneration = -1L
+    private var repeatDelete: Runnable? = null
+    private fun stopRepeatDelete() { repeatDelete?.let { handler.removeCallbacks(it) }; repeatDelete = null }
     private lateinit var store: PhraseStore
     private lateinit var stats: LearningStats
-    private lateinit var spellChecker: SystemSpellChecker
     private val composer = HangulComposer()
     private val handler = Handler(Looper.getMainLooper())
 
@@ -91,7 +94,6 @@ class LinguaKeyImeService : InputMethodService(), TextToSpeech.OnInitListener {
         cloud = CloudTranslator(this)
         store = PhraseStore(this)
         stats = LearningStats(this)
-        spellChecker = SystemSpellChecker(this)
         tts = TextToSpeech(this, this)
         resolvePalette()
         if (prefs.translationEnabled && prefs.translationProvider == "offline") {
@@ -126,7 +128,7 @@ class LinguaKeyImeService : InputMethodService(), TextToSpeech.OnInitListener {
         }
         keyboardRoot!!.addOnAttachStateChangeListener(object : View.OnAttachStateChangeListener {
             override fun onViewAttachedToWindow(v: View) { ViewCompat.requestApplyInsets(v) }
-            override fun onViewDetachedFromWindow(v: View) = Unit
+            override fun onViewDetachedFromWindow(v: View) { stopRepeatDelete(); dismissKeyPopup() }
         })
         keyboardRoot!!.addView(createLearningBar())
         keyboardRoot!!.addView(createCandidateBar())
@@ -188,6 +190,7 @@ class LinguaKeyImeService : InputMethodService(), TextToSpeech.OnInitListener {
 
     private fun rebuildKeys() {
         val root = keyboardRoot ?: return
+        stopRepeatDelete(); dismissKeyPopup()
         while (root.childCount > 2) root.removeViewAt(2)
         when {
             emojiMode -> buildEmojiKeys(root)
@@ -301,7 +304,7 @@ class LinguaKeyImeService : InputMethodService(), TextToSpeech.OnInitListener {
             when (event.actionMasked) {
                 MotionEvent.ACTION_DOWN -> {
                     view.isPressed = true
-                    if (prefs.keyPopupEnabled) showKeyPopup(this)
+                    if (prefs.keyPopupEnabled && !sensitive && !manualIncognito) showKeyPopup(this)
                     if (prefs.pressOnTouchDown) view.performClick()
                     true
                 }
@@ -331,15 +334,25 @@ class LinguaKeyImeService : InputMethodService(), TextToSpeech.OnInitListener {
     }
 
     private fun backspaceKey(): TextView {
-        val v = keyView("⌫") { }
-        var repeating = false
-        val repeat = object : Runnable {
-            override fun run() { if (repeating) { backspace(); handler.postDelayed(this, prefs.repeatIntervalMs.toLong()) } }
-        }
+        val v = keyView("⌫") { if (inputActive) backspace() }
         v.setOnTouchListener { view, event ->
             when (event.actionMasked) {
-                MotionEvent.ACTION_DOWN -> { keyFeedback(view); backspace(); repeating = true; handler.postDelayed(repeat, prefs.repeatDelayMs.toLong()); true }
-                MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> { repeating = false; handler.removeCallbacks(repeat); true }
+                MotionEvent.ACTION_DOWN -> {
+                    stopRepeatDelete()
+                    if (inputActive) {
+                        keyFeedback(view); backspace()
+                        val task = object : Runnable {
+                            override fun run() {
+                                if (inputActive && repeatDelete === this && view.isAttachedToWindow) {
+                                    backspace(); handler.postDelayed(this, prefs.repeatIntervalMs.toLong())
+                                }
+                            }
+                        }
+                        repeatDelete = task; handler.postDelayed(task, prefs.repeatDelayMs.toLong())
+                    }
+                    true
+                }
+                MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> { stopRepeatDelete(); true }
                 else -> true
             }
         }
@@ -374,10 +387,10 @@ class LinguaKeyImeService : InputMethodService(), TextToSpeech.OnInitListener {
 
     private fun insertSmartSpace() {
         commitComposition()
-        if (koreanMode && prefs.autoSpacingEnabled) {
+        if (!sensitive && !manualIncognito && koreanMode && prefs.autoSpacingEnabled) {
             val source = SentenceExtractor.current(currentInputConnection?.getTextBeforeCursor(500, 0))
             SmartCorrectionEngine.korean(source).firstOrNull()?.let { applySentenceReplacement(source, it.replacement) }
-        } else if (!koreanMode && prefs.englishAutocorrectEnabled) {
+        } else if (!sensitive && !manualIncognito && !koreanMode && prefs.englishAutocorrectEnabled) {
             val word = SentenceExtractor.currentWord(currentInputConnection?.getTextBeforeCursor(80, 0))
             SmartCorrectionEngine.englishWord(word).firstOrNull()?.let { replaceLastWord(word, it.replacement) }
         }
@@ -393,11 +406,15 @@ class LinguaKeyImeService : InputMethodService(), TextToSpeech.OnInitListener {
     }
 
     private fun handleCharacter(ch: Char) {
+        if (!inputActive) return
+        lastSpaceTime = 0
+        composer.combineDoubleInitials = prefs.combineDoubleInitials
         if (symbolMode) {
             commitComposition(); currentInputConnection?.commitText(ch.toString(), 1)
         } else if (koreanMode && isHangulJamo(ch)) {
             val result = composer.feed(ch)
             currentInputConnection?.let { CompositionEdits.apply(it, result) }
+            if (shiftState == ShiftState.ON) { shiftState = ShiftState.OFF; rebuildKeys() }
         } else {
             commitComposition(); currentInputConnection?.commitText(ch.toString(), 1)
             if (shiftState == ShiftState.ON) { shiftState = ShiftState.OFF; rebuildKeys() }
@@ -416,7 +433,7 @@ class LinguaKeyImeService : InputMethodService(), TextToSpeech.OnInitListener {
     private fun insertEmoji(emoji: String) {
         commitComposition(); currentInputConnection?.commitText(emoji, 1)
         val list = (listOf(emoji) + recentEmojis().filterNot { it == emoji }).take(24)
-        prefs.emojiRecents = list.joinToString("|")
+        if (!sensitive && !manualIncognito) prefs.emojiRecents = list.joinToString("|")
         scheduleAll(300L)
     }
 
@@ -428,10 +445,14 @@ class LinguaKeyImeService : InputMethodService(), TextToSpeech.OnInitListener {
     }
 
     private fun backspace() {
+        if (!inputActive) return
+        lastSpaceTime = 0
+        if (selectionActive) { composer.reset(); currentInputConnection?.finishComposingText() }
         if (composer.hasComposition()) {
             val r = composer.backspace()
             currentInputConnection?.let { CompositionEdits.apply(it, r) }
-        } else currentInputConnection?.deleteSurroundingText(1, 0)
+        } else currentInputConnection?.let { KeyboardTextEdits.deleteBackward(it, selectionActive) }
+        selectionActive = false
         scheduleAll(260L)
     }
 
@@ -459,10 +480,11 @@ class LinguaKeyImeService : InputMethodService(), TextToSpeech.OnInitListener {
     private fun scheduleAll(delay: Long = 550L) {
         // Invalidate old asynchronous results immediately when the text changes.
         generation++
-        cloud.cancel()
+        cloud.cancel(); pipeline.cancel()
         handler.removeCallbacks(translateRunnable)
         handler.removeCallbacks(suggestionsRunnable)
-        if (!inputActive) return
+        if (!inputActive || sensitive || manualIncognito) return
+        if (prefs.translationEnabled) statusText?.text = "입력 중 · 현재 문장 번역 대기"
         handler.postDelayed(translateRunnable, if (prefs.translationProvider == "offline") delay else maxOf(delay, prefs.translationDelayMs.toLong()))
         // Avoid synchronous cross-process cursor reads between rapid keystrokes.
         handler.postDelayed(suggestionsRunnable, 300L)
@@ -477,13 +499,24 @@ class LinguaKeyImeService : InputMethodService(), TextToSpeech.OnInitListener {
             val extracted = ic.getExtractedText(ExtractedTextRequest().apply { hintMaxChars = TranslationText.MAX_LENGTH + 1; hintMaxLines = 100 }, 0)
             val draft = if (extracted != null && extracted.startOffset == 0 && extracted.partialStartOffset < 0) extracted.text?.toString()
                 else null
-            TranslationText.validate(draft ?: ((ic.getTextBeforeCursor(TranslationText.MAX_LENGTH + 1, 0)?.toString() ?: "") +
-                (ic.getTextAfterCursor(TranslationText.MAX_LENGTH + 1, 0)?.toString() ?: "")))
+            TranslationText.validate(draft ?: run {
+                val before = ic.getTextBeforeCursor(TranslationText.MAX_LENGTH + 1, 0)
+                    ?: error("이 입력창에서 전체 작성문을 읽지 못했습니다.")
+                val selected = ic.getSelectedText(0)
+                if (selectionActive && selected == null) error("선택한 글자를 읽지 못했습니다. 선택을 해제한 뒤 다시 번역해주세요.")
+                val after = ic.getTextAfterCursor(TranslationText.MAX_LENGTH + 1, 0)
+                    ?: error("이 입력창에서 전체 작성문을 읽지 못했습니다.")
+                before.toString() + selected?.toString().orEmpty() + after
+            })
         } catch (e: Exception) {
             clearLearningBar(); naturalText?.text = e.message ?: "입력문을 읽지 못했습니다."; return
         }
         if (source.length < 2 || !source.any { it in '가'..'힣' }) { clearLearningBar(); return }
-        if (source == currentKorean && currentEnglish.isNotBlank()) return
+        if (source == currentKorean && currentEnglish.isNotBlank()) {
+            translatedGeneration = generation
+            statusText?.text = "현재 문장 번역 완료 · 위아래 스크롤"
+            return
+        }
         currentKorean = source; currentEnglish = ""; currentNatural = ""; currentAnalysis = null
         literalText?.visibility = View.GONE; detailText?.visibility = View.GONE
         val myGeneration = generation
@@ -493,6 +526,7 @@ class LinguaKeyImeService : InputMethodService(), TextToSpeech.OnInitListener {
         statusText?.text = "$name · 원문 ${source.length}자 · 결과는 위아래로 스크롤"
         val onSuccess: (String) -> Unit = { en ->
             if (myGeneration == generation && inputActive && !sensitive && !manualIncognito) {
+                translatedGeneration = myGeneration
                 currentEnglish = en.trim()
                 currentAnalysis = LearningAnalyzer.analyze(source, currentEnglish)
                 currentNatural = currentEnglish
@@ -523,7 +557,7 @@ class LinguaKeyImeService : InputMethodService(), TextToSpeech.OnInitListener {
         literalText?.visibility = if (expanded) View.VISIBLE else View.GONE
         detailText?.visibility = if (expanded && (a?.phrases?.isNotEmpty() == true || a?.tip != null)) View.VISIBLE else View.GONE
         if (!expanded || a == null) return
-        literalText?.text = if (a.natural != a.literal) "직역/기본 번역  ${a.literal}" else "기본 번역  ${a.literal}"
+        literalText?.text = a.difficultyLabel + " · 공식 CEFR 평가 아님"
         val pieces = mutableListOf<String>()
         if (a.phrases.isNotEmpty()) pieces += "핵심 표현  ${a.phrases.joinToString(" · ")}"
         a.tip?.let { pieces += it }
@@ -551,17 +585,7 @@ class LinguaKeyImeService : InputMethodService(), TextToSpeech.OnInitListener {
         } else {
             val word = SentenceExtractor.currentWord(before)
             val local = SmartCorrectionEngine.englishWord(word).map { it.replacement }
-            if (local.isNotEmpty()) renderEnglishSuggestions(word, local)
-            else {
-                val requestedGeneration = generation
-                spellChecker.suggest(word) { system ->
-                    handler.post {
-                        if (inputActive && requestedGeneration == generation && !sensitive && !manualIncognito) {
-                            renderEnglishSuggestions(word, system)
-                        }
-                    }
-                }
-            }
+            renderEnglishSuggestions(word, local) // No third-party system spellchecker traffic.
         }
     }
 
@@ -588,6 +612,8 @@ class LinguaKeyImeService : InputMethodService(), TextToSpeech.OnInitListener {
     private fun applySentenceReplacement(original: String, replacement: String) {
         if (original.isBlank() || original == replacement) return
         val connection = currentInputConnection ?: return
+        if (sensitive || manualIncognito || selectionActive || !connection.getSelectedText(0).isNullOrEmpty()) return
+        if (connection.getTextBeforeCursor(original.length, 0)?.toString() != original) return
         connection.beginBatchEdit()
         try {
             connection.deleteSurroundingText(original.length, 0)
@@ -598,6 +624,8 @@ class LinguaKeyImeService : InputMethodService(), TextToSpeech.OnInitListener {
     private fun replaceLastWord(original: String, replacement: String) {
         if (original.isBlank() || original == replacement) return
         val connection = currentInputConnection ?: return
+        if (sensitive || manualIncognito || selectionActive || !connection.getSelectedText(0).isNullOrEmpty()) return
+        if (connection.getTextBeforeCursor(original.length, 0)?.toString() != original) return
         connection.beginBatchEdit()
         try {
             connection.deleteSurroundingText(original.length, 0)
@@ -609,24 +637,29 @@ class LinguaKeyImeService : InputMethodService(), TextToSpeech.OnInitListener {
         currentKorean = ""; currentEnglish = ""; currentNatural = ""; currentAnalysis = null
         naturalText?.text = "한글을 입력하면 영어가 여기에 표시됩니다."
         literalText?.visibility = View.GONE; detailText?.visibility = View.GONE; starButton?.text = "☆"
-        statusText?.text = "온디바이스 · 입력 내용 자동 저장 안 함"
+        statusText?.text = "영어 번역 대기 · 입력 내용 자동 저장 안 함"
     }
 
     private fun saveCurrent() {
-        if (sensitive || manualIncognito || currentKorean.isBlank() || currentNatural.isBlank()) return
+        if (sensitive || manualIncognito || translatedGeneration != generation || currentKorean.isBlank() || currentNatural.isBlank()) return
         store.save(currentKorean, currentNatural); starButton?.text = "★"; statusText?.text = "복습 목록에 저장됨"
         if (prefs.statsEnabled) stats.recordSave()
     }
 
     private fun speakCurrent() {
-        if (currentNatural.isBlank() || sensitive || manualIncognito) return
-        tts?.speak(currentNatural.replace(" / ", ". "), TextToSpeech.QUEUE_FLUSH, null, "linguakey")
-        if (prefs.statsEnabled) stats.recordListen()
+        if (currentNatural.isBlank() || sensitive || manualIncognito || translatedGeneration != generation) return
+        if (OfflineSpeech.speak(tts, currentNatural, "linguakey")) {
+            if (prefs.statsEnabled) stats.recordListen()
+        } else statusText?.text = "기기에 영어 오프라인 음성을 설치해주세요."
     }
 
     private fun toggleIncognito() {
         manualIncognito = !manualIncognito
-        if (manualIncognito) { cloud.cancel(); generation++; currentKorean = ""; currentEnglish = ""; currentNatural = ""; showPrivateMode() }
+        if (manualIncognito) {
+            cloud.cancel(); pipeline.clear(); tts?.stop(); dismissKeyPopup(); generation++
+            currentKorean = ""; currentEnglish = ""; currentNatural = ""; currentAnalysis = null; sessionRecorded.clear()
+            showPrivateMode()
+        }
         else { statusText?.text = "학습 모드 다시 켜짐"; scheduleAll(100L) }
         updateSuggestions()
     }
@@ -646,9 +679,11 @@ class LinguaKeyImeService : InputMethodService(), TextToSpeech.OnInitListener {
     override fun onStartInput(attribute: EditorInfo?, restarting: Boolean) {
         super.onStartInput(attribute, restarting)
         handler.removeCallbacks(translateRunnable); handler.removeCallbacks(suggestionsRunnable)
-        cloud.cancel()
+        cloud.cancel(); pipeline.clear(); tts?.stop(); stopRepeatDelete(); dismissKeyPopup(); sessionRecorded.clear()
+        selectionActive = attribute?.initialSelStart != attribute?.initialSelEnd
         inputActive = true
         composer.reset(); generation++; sensitive = SensitiveFieldDetector.isSensitive(attribute)
+        clearLearningBar()
         currentKorean = ""; currentEnglish = ""; currentNatural = ""; currentAnalysis = null
         shiftState = ShiftState.OFF; symbolMode = false; emojiMode = false
     }
@@ -663,21 +698,32 @@ class LinguaKeyImeService : InputMethodService(), TextToSpeech.OnInitListener {
         if (sensitive || manualIncognito) showPrivateMode() else scheduleAll(100L)
     }
 
+    override fun onUpdateSelection(oldSelStart: Int, oldSelEnd: Int, newSelStart: Int, newSelEnd: Int, candidatesStart: Int, candidatesEnd: Int) {
+        super.onUpdateSelection(oldSelStart, oldSelEnd, newSelStart, newSelEnd, candidatesStart, candidatesEnd)
+        selectionActive = newSelStart != newSelEnd
+        if (composer.hasComposition() && (selectionActive || (candidatesEnd >= 0 && (newSelStart != candidatesEnd || newSelEnd != candidatesEnd)))) {
+            composer.reset(); currentInputConnection?.finishComposingText()
+        }
+        if (inputActive && (oldSelStart != newSelStart || oldSelEnd != newSelEnd)) scheduleAll()
+    }
+
     override fun onFinishInputView(finishingInput: Boolean) {
-        inputActive = false; generation++; cloud.cancel(); dismissKeyPopup()
+        inputActive = false; generation++; cloud.cancel(); pipeline.clear(); dismissKeyPopup(); stopRepeatDelete(); tts?.stop()
+        currentKorean = ""; currentEnglish = ""; currentNatural = ""; currentAnalysis = null; sessionRecorded.clear()
         handler.removeCallbacks(translateRunnable); handler.removeCallbacks(suggestionsRunnable)
+        clearLearningBar()
         super.onFinishInputView(finishingInput)
     }
 
     override fun onFinishInput() {
-        inputActive = false; cloud.cancel(); dismissKeyPopup()
+        inputActive = false; cloud.cancel(); pipeline.clear(); dismissKeyPopup(); stopRepeatDelete(); tts?.stop(); sessionRecorded.clear()
         super.onFinishInput(); handler.removeCallbacks(translateRunnable); handler.removeCallbacks(suggestionsRunnable)
         composer.reset(); generation++; currentKorean = ""; currentEnglish = ""; currentNatural = ""; currentAnalysis = null
     }
 
     override fun onEvaluateFullscreenMode() = false
 
-    override fun onInit(status: Int) { if (status == TextToSpeech.SUCCESS) { tts?.language = Locale.US; tts?.setSpeechRate(0.92f) } }
+    override fun onInit(status: Int) { if (status == TextToSpeech.SUCCESS) { tts?.let { OfflineSpeech.configure(it) }; tts?.setSpeechRate(0.92f) } }
 
     private fun keyFeedback(view: View) {
         if (prefs.hapticEnabled) {
@@ -718,6 +764,6 @@ class LinguaKeyImeService : InputMethodService(), TextToSpeech.OnInitListener {
     private fun dpF(v: Float) = v * resources.displayMetrics.density
 
     override fun onDestroy() {
-        handler.removeCallbacksAndMessages(null); cloud.close(); dismissKeyPopup(); spellChecker.close(); translator.close(); tts?.shutdown(); super.onDestroy()
+        handler.removeCallbacksAndMessages(null); cloud.close(); pipeline.clear(); stopRepeatDelete(); dismissKeyPopup(); translator.close(); tts?.shutdown(); super.onDestroy()
     }
 }

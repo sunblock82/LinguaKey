@@ -116,4 +116,7 @@ class Prefs(context: Context) {
     var themeMode: String
         get() = p.getString("themeMode", "system") ?: "system"
         set(v) = p.edit().putString("themeMode", v).apply()
+    var combineDoubleInitials: Boolean
+        get() = p.getBoolean("combineDoubleInitials", true)
+        set(v) = p.edit().putBoolean("combineDoubleInitials", v).apply()
 }

@@ -11,8 +11,8 @@ android {
         applicationId = "com.linguakey.keyboard"
         minSdk = 23
         targetSdk = 36
-        versionCode = 22
-        versionName = "2.1.0"
+        versionCode = 23
+        versionName = "2.1.1"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
@@ -20,6 +20,15 @@ android {
     buildFeatures {
         viewBinding = false
         buildConfig = true
+    }
+
+    buildTypes {
+        getByName("release") {
+            isDebuggable = false
+            isMinifyEnabled = false
+            // Personal distribution: preserve the identity of the already-installed APK.
+            signingConfig = signingConfigs.getByName("debug")
+        }
     }
 
     compileOptions {
@@ -40,6 +49,8 @@ dependencies {
 
     testImplementation("junit:junit:4.13.2")
     testImplementation("org.json:json:20240303")
+    androidTestImplementation("androidx.test:runner:1.7.0")
+    androidTestImplementation("androidx.test.ext:junit:1.3.0")
 }
 
 kotlin {

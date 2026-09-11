@@ -1,18 +1,27 @@
-# LinguaKey 2.1.0
+# LinguaKey 2.1.1
 
-Korean keyboard with full-draft Korean-to-English learning translations.
+한글 원문은 입력창에 유지하고, 전체 작성문의 영어 번역을 키보드에서 보는 Android 학습 키보드입니다.
 
-## This update
-- Full editable draft extraction, including text after the cursor and paragraph breaks. Inputs over 6,000 characters fail explicitly, rather than being silently truncated. Offline chunks preserve all input.
-- Removed phrase-rule replacement of entire translations. Translation output is scrollable.
-- Optional OpenAI Responses / Gemini generateContent integration with personal encrypted API keys, cloud consent, manually configured context and tone, request cancellation and incomplete-response detection. Model names are editable. Defaults: gpt-4.1-mini and gemini-2.5-flash.
-- Advanced settings: keyboard height, key spacing, side/bottom padding, font size/letter spacing, corners/borders/themes, touch-down or release input, key preview, vibration duration, sound volume, cursor sensitivity, backspace delay/repeat, double-space period.
+## 이번 개선
+- 전체 작성문 번역과 문단 유지. 6,000자 초과, 빈 응답, API 출력 제한은 오류로 안내합니다. 번역 전체를 짧은 표현 예시로 덮어쓰던 처리를 제거했습니다.
+- 선택형 GPT/Gemini 문맥 번역: 전체 작성문 + 사용자가 지정한 상황·말투. 상대방 대화를 자동으로 읽지 않습니다.
+- 상세설정: 높이, 키 사이 간격, 좌우·하단 여백, 글자 크기·자간, 모서리·테두리·테마, 입력 시점, 키 확대, 진동·소리, 커서 민감도, 삭제 반복, 쌍자음·스페이스 옵션.
+- 한글 연속 모음, 쌍자음 삭제, 선택 영역 삭제, 복합 이모지 삭제 개선. 내비게이션 영역은 시스템 inset으로 확보합니다.
+- 복습 답 숨기기, 문장별 삭제, 전체 목록·페이지 이동. 단어 수를 공인 CEFR 수준으로 표시하지 않습니다.
+- API 키 암호화, 민감 입력 보호, 전송 취소, 백업·기기 전송 제외 규칙, 데이터 삭제. 최종 APK는 디버깅이 비활성화됩니다.
 
-## Installation
-Install the APK from the Actions artifact. Enable LinguaKey in Android keyboard settings and select it. For cloud translation open Advanced Settings > AI translation, choose provider, save API key locally and enable explicit cloud consent. Set context/tone and run the test button. Personal API access/billing is required separately. Keys must not be committed to this repository.
+## 설치와 설정
+1. Actions의 `LinguaKey-apk`에서 ZIP을 받아 압축을 풀고 APK를 설치합니다. 기존 2.0.1과 서명이 같으면 업데이트 설치할 수 있습니다.
+2. 앱에서 키보드를 활성화하고 현재 키보드를 LinguaKey로 선택합니다.
+3. `상세설정 · 키 간격/감도 · GPT/Gemini` → `AI 번역`에서 제공자를 선택합니다. 본인 API 키를 앱에 직접 입력하고 저장한 다음 작성문 전송을 허용합니다. API 사용·요금·한도는 별도입니다.
+4. 상황과 말투를 입력한 후 각각 저장합니다. 대화 상대가 바뀌면 상황도 바꾸거나 비워주세요. 연결 테스트로 확인합니다.
+5. `키보드 상세`에서 타건감과 간격을 조절합니다. 키보드를 닫았다 열면 적용됩니다. 다른 앱의 입력창 자간은 해당 앱이 정합니다.
 
-## Validation
-CI runs all unit tests before assembling the APK. Tests cover Hangul composing batches, phrase-preservation regression, lossless chunking, length limits and provider-response parsing. Actual cloud calls require a user API key and have not been live-tested in CI. OEM keyboard UX needs on-device checking.
+기본 모델: `gpt-4.1-mini`, `gemini-2.5-flash`. 계정이 제공하는 모델 이름으로 수정할 수 있습니다. 기기 내 번역은 모델 다운로드 후 이용합니다. AI도 오역할 수 있으며 이번 변경의 실서비스 품질 비교는 API 키가 없어 수행하지 않았습니다.
 
-## Build
-JDK 17, Gradle 8.13, Android SDK 36; run `gradle :app:testDebugUnitTest :app:assembleDebug`. GitHub Actions caches the debug signing identity for subsequent builds; this is not a durable production release-signing system.
+## 검증과 개인정보
+[검토 결과](SECURITY_REVIEW.md), [개인정보 안내](PRIVACY.md)를 확인하세요. CI는 단위 테스트, Android 35 에뮬레이터 테스트, APK 서명·디버깅 비활성화 검사를 수행하며 보고서를 보관합니다. 실제 휴대전화 타건감과 제조사별 내비게이션은 추가 사용 확인이 필요합니다.
+
+## 빌드
+JDK 17, Gradle 8.13, Android SDK 36. `gradle :app:testDebugUnitTest :app:assembleDebug :app:assembleRelease`.
+최종 개인 배포 APK는 release 빌드이며, 기존 설치와 호환되도록 캐시된 개발 서명키를 사용합니다. Actions 캐시 소실에 대비한 영구 배포 키 관리나 Play Store 출시 체계는 별도 준비가 필요합니다.
