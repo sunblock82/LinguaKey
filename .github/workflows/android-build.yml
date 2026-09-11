@@ -26,12 +26,6 @@ jobs:
         with:
           gradle-version: '8.13'
 
-      - name: Preserve debug signing identity for subsequent updates
-        uses: actions/cache@v4
-        with:
-          path: ~/.android/debug.keystore
-          key: linguakey-debug-signing-v1
-
       - name: Build and run unit tests
         run: gradle :app:testDebugUnitTest :app:assembleDebug :app:assembleDebugAndroidTest :app:assembleRelease --stacktrace
 
@@ -52,9 +46,9 @@ jobs:
 
       - name: Name installation file
         run: |
-          cp app/build/outputs/apk/release/app-release.apk LinguaKey.apk
-          "$ANDROID_HOME/build-tools/36.0.0/apksigner" verify --verbose --print-certs LinguaKey.apk
-          "$ANDROID_HOME/build-tools/36.0.0/aapt" dump badging LinguaKey.apk > apk-badging.txt
+          cp app/build/outputs/apk/release/app-release-unsigned.apk LinguaKey-unsigned.apk
+          cp "$ANDROID_HOME/build-tools/36.0.0/lib/apksigner.jar" apksigner.jar
+          "$ANDROID_HOME/build-tools/36.0.0/aapt" dump badging LinguaKey-unsigned.apk > apk-badging.txt
           if grep -q "application-debuggable" apk-badging.txt; then exit 1; fi
 
       - name: Upload validation reports
@@ -72,5 +66,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: LinguaKey-apk
-          path: LinguaKey.apk
+          path: |
+            LinguaKey-unsigned.apk
+            apksigner.jar
           if-no-files-found: error

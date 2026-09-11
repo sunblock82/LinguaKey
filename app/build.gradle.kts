@@ -26,8 +26,7 @@ android {
         getByName("release") {
             isDebuggable = false
             isMinifyEnabled = false
-            // Personal distribution: preserve the identity of the already-installed APK.
-            signingConfig = signingConfigs.getByName("debug")
+            // Signed after CI using the owner's private, durable key. Never cache signing keys in Actions.
         }
     }
 
